@@ -1,2 +1,11 @@
-first: main
-	g++ main.c scene.h custom_utils.h -o main
+build:
+	g++ main.cpp scene.h custom_utils.h public_image.h objects.h -o main
+
+run:
+	./main -i
+
+run_s:
+	./main -i < samples/input2.txt
+
+clean:
+	rm main
