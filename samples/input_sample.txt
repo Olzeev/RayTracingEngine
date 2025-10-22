@@ -1,0 +1,14 @@
+spheres count
+    sphere pos
+    sphere radius
+boxes count
+    pos
+    size
+planes count
+    direction
+    height
+light sources count
+    position
+    power
+camera pos
+camera dir

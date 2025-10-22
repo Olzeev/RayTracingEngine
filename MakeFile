@@ -1,0 +1,2 @@
+first: main
+	g++ main.c scene.h custom_utils.h -o main
