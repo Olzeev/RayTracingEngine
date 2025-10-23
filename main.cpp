@@ -20,7 +20,7 @@ using LiteMath::float3, LiteMath::normalize;
 #define PI 3.14159265359
 #define FOV PI / 2
 #define MAX_DIST 10e5
-#define EPS 0.001f
+#define EPS 0.000001f
 
 
 
@@ -62,10 +62,16 @@ float3 render(Scene scene, Camera camera, float3 cur_pos, float3 cur_dir) {
             intersect_normal = scene.planes[i].get_normal(cur_pos, EPS);
           }
         }
+        for (int i = 0; i < scene.fractals_size; ++i) {
+          float dist = scene.fractals[i].sdf(cur_pos);
+          if (dist < cur_min_dist) {
+            cur_min_dist = dist;
+            intersect_normal = scene.fractals[i].get_normal(cur_pos, EPS);
+          }
+        }
         if (cur_min_dist <= DIST_MIN) {
           intersect = true;
           intersect_point = cur_pos;
-
           break;
         } else if (cur_min_dist >= MAX_DIST) {
           break;
@@ -108,10 +114,14 @@ int main(int argc, char **argv)
   int sample_id = -1;
 
   int spheres_count = 0, boxes_count = 0, planes_count = 0, light_sources_count = 0;
+  int fractals_count = 0;
+
   Sphere *spheres; 
   Box *boxes;
   Plane *planes;
+  Mundelbulb *fractals;
   LightSource *light_sources;
+
 
   Camera camera;
 
@@ -167,6 +177,29 @@ int main(int argc, char **argv)
       planes[i].h = h;
     }
 
+    std::cout << "Mundelbulbs count:\n";
+    std::cin >> fractals_count;
+    fractals = new Mundelbulb[fractals_count];
+    
+    for (int i = 0; i < fractals_count; ++i) {
+      float x, y, z, bailout;
+      int iter, power;
+
+      std::cout << "Fractal " << i + 1 << " position <x y z>:\n";
+      std::cin >> x >> y >> z;
+      std::cout << "Fractal " << i + 1 << " render iterations: \n";
+      std::cin >> iter;
+      std::cout << "Fractal " << i + 1 << " bailout:\n";
+      std::cin >> bailout;
+      std::cout << "Fractal " << i + 1 << " power:\n";
+      std::cin >> power;
+
+      fractals[i].pos = float3(x, y, z);
+      fractals[i].iterations = iter;
+      fractals[i].bailout = bailout;
+      fractals[i].power = power;
+    }
+
     std::cout << "Light sources count:\n";
     std::cin >> light_sources_count;
     light_sources = new LightSource[light_sources_count];
@@ -194,6 +227,7 @@ int main(int argc, char **argv)
       boxes, boxes_count, 
       spheres, spheres_count, 
       planes, planes_count, 
+      fractals, fractals_count,
       light_sources, light_sources_count
     };
   }
@@ -202,13 +236,13 @@ int main(int argc, char **argv)
   for (int x = 0; x < W; ++x) {
     for (int y = 0; y < H; ++y) {
       float3 new_dir = screen_offset(camera.dir, x, y, W, H, FOV);
-      //std::cout << "h\n";
       float3 col = render(scene, camera, camera.pos, new_dir);
-      //std::cout << new_dir.x << ' ' << new_dir.y << ' ' << new_dir.z << '\n';
       image[get_image_index(x, y, 'r', W, H)] = col.x;
       image[get_image_index(x, y, 'g', W, H)] = col.y;
       image[get_image_index(x, y, 'b', W, H)] = col.z;
     }
+    if (x % 50 == 0)
+      std::cout << '\r' << float(x) / W * 100 << "%\n" << std::flush;
   }
   std::cout << "Rendering finished!\n";
 

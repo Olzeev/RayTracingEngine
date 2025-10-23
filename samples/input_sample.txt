@@ -7,6 +7,11 @@ boxes count
 planes count
     direction
     height
+fractals count
+    position
+    iterations
+    bailout
+    power
 light sources count
     position
     power

@@ -10,6 +10,9 @@ struct Scene {
     Plane *planes;
     int planes_size;
 
+    Mundelbulb *fractals;
+    int fractals_size;
+
     LightSource *light_sources;
     int light_sources_count;
 };
