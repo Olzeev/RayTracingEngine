@@ -30,16 +30,12 @@ struct Camera {
 };
 
 
-float3 render(Scene scene, Camera camera, float3 cur_pos, float3 cur_dir) {
-    int iter_count = 0;
-    bool intersect = false;
-    float3 intersect_point;
-    float3 intersect_normal;
-
-    while (iter_count < ITER_MAX) {
+int ray_marching(Scene scene, Camera camera, float3 cur_pos, float3 cur_dir, 
+  float3 &intersect_point, 
+  float3 &intersect_normal) 
+{
+    for (int iter = 0; iter < ITER_MAX; ++iter) {
         float cur_min_dist = MAX_DIST;
-        cur_dir = normalize(cur_dir);
-        
 
         for (int i = 0; i < scene.boxes_size; ++i) {
           float dist = scene.boxes[i].sdf(cur_pos);
@@ -88,6 +84,10 @@ float3 render(Scene scene, Camera camera, float3 cur_pos, float3 cur_dir) {
       return float3(c);
     } else 
       return float3(0.0f);
+}
+
+float3 render(Scene scene, Camera camera, float3 cur_pos, float3 cur_dir) {
+    
 
 }
 
@@ -147,6 +147,8 @@ int main(int argc, char **argv)
       std::cout << "Sphere " << i + 1 << " radius:\n";
       std::cin >> r;
       spheres[i].r = r;
+      Material mat;
+      spheres[i].mat = mat;
     }
 
     std::cout << "Boxes count:\n";
@@ -161,6 +163,8 @@ int main(int argc, char **argv)
       std::cout << "Box " << i + 1 << " size <a b c>:\n";
       std::cin >> a >> b >> c;
       boxes[i].box_size = float3(a, b, c);
+      Material mat;
+      boxes[i].mat = mat;
     }
 
     std::cout << "Planes count:\n";
@@ -175,6 +179,8 @@ int main(int argc, char **argv)
       std::cout << "Plane " << i + 1 << " height:\n";
       std::cin >> h;
       planes[i].h = h;
+      Material mat;
+      planes[i].mat = mat;
     }
 
     std::cout << "Mundelbulbs count:\n";
@@ -189,15 +195,14 @@ int main(int argc, char **argv)
       std::cin >> x >> y >> z;
       std::cout << "Fractal " << i + 1 << " render iterations: \n";
       std::cin >> iter;
-      std::cout << "Fractal " << i + 1 << " bailout:\n";
-      std::cin >> bailout;
       std::cout << "Fractal " << i + 1 << " power:\n";
       std::cin >> power;
 
       fractals[i].pos = float3(x, y, z);
       fractals[i].iterations = iter;
-      fractals[i].bailout = bailout;
       fractals[i].power = power;
+      Material mat;
+      fractals[i].mat = mat;
     }
 
     std::cout << "Light sources count:\n";
@@ -205,13 +210,20 @@ int main(int argc, char **argv)
     light_sources = new LightSource[light_sources_count];
 
     for (int i = 0; i < light_sources_count; ++i) {
-      float x, y, z, p;
+      float x, y, z, r, p;
       std::cout << "Light source " << i + 1 << " position <x y z>:\n";
       std::cin >> x >> y >> z;
       light_sources[i].pos = float3(x, y, z);
+      std::cout << "Light source " << i + 1 << " radius:\n";
+      std::cin >> r;
+      light_sources[i].r = r;
       std::cout << "Light source " << i + 1 << " power:\n";
       std::cin >> p;
       light_sources[i].power = p;
+      float3 col;
+      std::cout << "Light source " << i + 1 << " color <r[0-1] g[0-1] b[0-1]>:\n";
+      std::cin >> col.x >> col.y >> col.z;
+      light_sources[i].color = col; 
     }
 
     float cx, cy, cz;

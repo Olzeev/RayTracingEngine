@@ -10,7 +10,6 @@ planes count
 fractals count
     position
     iterations
-    bailout
     power
 light sources count
     position

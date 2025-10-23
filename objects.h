@@ -3,9 +3,18 @@
 using LiteMath::float3, LiteMath::float2, LiteMath::length, LiteMath::max, LiteMath::min, 
     LiteMath::abs;
 
+
+struct Material {
+    float3 color = float3(1.0, 1.0, 1.0);
+    float roughness = 0.7;
+};
+
+
+
 struct Box {
     float3 pos;
     float3 box_size;
+    Material mat;
 
     float sdf(float3 p) {
         float3 q = abs(p - pos) - box_size;
@@ -23,6 +32,7 @@ struct Box {
 struct Sphere {
     float3 pos;
     float r;
+    Material mat;
 
     float sdf(float3 p) {
         return length(p - pos) - r;
@@ -38,6 +48,7 @@ struct Sphere {
 struct Plane {
     float h;
     float3 dir;
+    Material mat;
 
     float sdf(float3 p)
     {
@@ -53,7 +64,9 @@ struct Plane {
 
 struct LightSource {
     float3 pos;
+    float r;
     float power;
+    float3 color;
 
     float lambert(float3 point, float3 normal) {
         return min(max(0.05f, dot(normal, normalize(pos - point))) * power, 1.0f);
@@ -64,8 +77,8 @@ struct LightSource {
 struct Mundelbulb {
     float3 pos;
     int iterations;
-    float bailout;
     int power;
+    Material mat;
 
     float sdf(float3 point) {
         float3 z = point - pos;
@@ -74,7 +87,7 @@ struct Mundelbulb {
 
         for (int i = 0; i < iterations ; i++) {
             r = length(z);
-            if (r > bailout) break;
+            if (r > 2.0) break;
             
             // convert to polar coordinates
             float theta = acos(z.z / r);
