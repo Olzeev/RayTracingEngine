@@ -6,88 +6,187 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
-#include <iostream>
-#include "scene.h"
 #include "custom_utils.h"
+#include "input.h"
 #include "public_image.h"
 
 
 
 using LiteMath::float3, LiteMath::normalize;
 
-#define DIST_MIN 0.001f
-#define ITER_MAX 50
-#define PI 3.14159265359
-#define FOV PI / 2
-#define MAX_DIST 10e5
-#define EPS 0.000001f
+// GENERAL
+float FOV = PI / 2;
+
+// RAYMARCHING
+int ITER_MAX = 50;
+float DIST_MIN = 0.001f;
+float MAX_DIST = 10e5;
+float EPS = 0.0001f;
+
+// RAYTRACING
+int REFLECT_ITERATIONS = 2;
+int DIFFUSE_RAYS_COUNT = 2;
+float3 BACKGROUND_COLOR = float3(0.0);
 
 
 
-struct Camera {
-    float3 pos;
-    float3 dir;
-};
 
-
-int ray_marching(Scene scene, Camera camera, float3 cur_pos, float3 cur_dir, 
+int ray_marching(
+  Scene scene, float3 cur_pos, float3 cur_dir, 
   float3 &intersect_point, 
-  float3 &intersect_normal) 
-{
+  float3 &intersect_normal, 
+  Material &mat
+) {
+  
+  float3 cur_intersection_point, cur_intersection_normal;
     for (int iter = 0; iter < ITER_MAX; ++iter) {
         float cur_min_dist = MAX_DIST;
-
-        for (int i = 0; i < scene.boxes_size; ++i) {
-          float dist = scene.boxes[i].sdf(cur_pos);
-          if (dist < cur_min_dist) {
-            cur_min_dist = dist;
-            intersect_normal = scene.boxes[i].get_normal(cur_pos, EPS);
-          }
-        }
-        for (int i = 0; i < scene.spheres_size; ++i) {
-          float dist = scene.spheres[i].sdf(cur_pos);
-          if (dist < cur_min_dist) {
-            cur_min_dist = dist;
-            intersect_normal = scene.spheres[i].get_normal(cur_pos, EPS);
-          }
-        }
-        for (int i = 0; i < scene.planes_size; ++i) {
-          float dist = scene.planes[i].sdf(cur_pos);
-          if (dist < cur_min_dist) {
-            cur_min_dist = dist;
-            intersect_normal = scene.planes[i].get_normal(cur_pos, EPS);
-          }
-        }
+        Mundelbulb intersect_object;
         for (int i = 0; i < scene.fractals_size; ++i) {
           float dist = scene.fractals[i].sdf(cur_pos);
           if (dist < cur_min_dist) {
             cur_min_dist = dist;
-            intersect_normal = scene.fractals[i].get_normal(cur_pos, EPS);
+            intersect_object = scene.fractals[i];
           }
         }
         if (cur_min_dist <= DIST_MIN) {
-          intersect = true;
           intersect_point = cur_pos;
-          break;
+          intersect_normal = intersect_object.get_normal(cur_pos, EPS);
+          mat = intersect_object.mat;
+          return 0;
         } else if (cur_min_dist >= MAX_DIST) {
-          break;
+          return -1;
         }
         cur_pos = cur_pos + cur_dir * cur_min_dist;
-
-        iter_count++;
     }
-    if (intersect) {
-      float c = 0;
-      for (int i = 0; i < scene.light_sources_count; ++i) {
-        c += scene.light_sources[i].lambert(intersect_point, intersect_normal);
-      }
-      return float3(c);
-    } else 
-      return float3(0.0f);
+    return -1;
 }
 
-float3 render(Scene scene, Camera camera, float3 cur_pos, float3 cur_dir) {
+
+
+int ray_tracing( 
+  Scene scene, float3 cur_pos, float3 cur_dir, 
+  float3 &intersect_point, 
+  float3 &intersect_normal, 
+  Material &mat
+) {
+  float2 cur_min_dist = float2(MAX_DIST);
+  bool intersect = false;
+  cur_pos += cur_dir * EPS;
+  for (int i = 0; i < scene.boxes_size; ++i) {
+    float3 cur_normal;
+    float2 dist = scene.boxes[i].intersection(cur_pos, cur_dir, cur_normal);
+    if (dist.x >= 0 && dist.x < cur_min_dist.x) {
+      cur_min_dist = dist;
+      intersect_normal = cur_normal;
+      intersect = true;
+      mat = scene.boxes[i].mat;
+    }
+  }
+  for (int i = 0; i < scene.spheres_size; ++i) {
+    float3 cur_normal;
+    float2 dist = scene.spheres[i].intersection(cur_pos, cur_dir, cur_normal);
+    if (dist.x >= 0 && dist.x < cur_min_dist.x) {
+      cur_min_dist = dist;
+      intersect_normal = cur_normal;
+      intersect = true;
+      mat = scene.spheres[i].mat;
+    }
+  }
+  for (int i = 0; i < scene.planes_size; ++i) {
+    float3 cur_normal;
+    float2 dist = scene.planes[i].intersection(cur_pos, cur_dir, 1e-6);
+    if (dist.x >= 0 && dist.x < cur_min_dist.x) {
+      cur_min_dist = dist;
+      intersect_normal = scene.planes[i].dir;
+      intersect = true;
+      mat = scene.planes[i].mat;
+    }
+  }
+  if (intersect) {
+    intersect_point = cur_pos + cur_min_dist.x * cur_dir;
+    return 0;
+  }
+  return -1;
+}
+
+
+float ambient_occlusion(Scene scene, float3 point, float3 normal) {
+  int cnt = 0;
+  float radius = 5.0f;
+  for (int i = 0; i < DIFFUSE_RAYS_COUNT; ++i) {
+    float3 cur_dir = random_on_hemisphere(normal);
+    float3 p1, p2, p3;
+    Material mat;
+    if (ray_tracing(scene, point, cur_dir, p1, p3, mat) == 0 || ray_marching(scene, point, cur_dir, p2, p3, mat) == 0) {
+      float dist = min(length(p1 - point), length(p2 - point));
+      if (dist <= radius) {
+        cnt++;
+      }
+    }
+  }
+  //std::cout << 1.0f - float(cnt) / DIFFUSE_RAYS_COUNT << '\n';
+  return 1.0f - float(cnt) / DIFFUSE_RAYS_COUNT;
+}
+
+float3 render(Scene scene, float3 cur_pos, float3 cur_dir, int iter) {
+  if (iter >= REFLECT_ITERATIONS) {
+    return float3(0.0);
+  }
+  float3 intersect_point1, intersect_normal1;
+  Material mat1;
+  int res1 = ray_marching(scene, cur_pos, cur_dir, intersect_point1, intersect_normal1, mat1);
+  
+  float3 intersect_point2, intersect_normal2;
+  Material mat2;
+  int res2 = ray_tracing(scene, cur_pos, cur_dir, intersect_point2, intersect_normal2, mat2);
+
+
+  if (res1 != 0 && res2 != 0) {
+    return BACKGROUND_COLOR;
+  }
+  if ((res1 == 0 && res2 == 0)) {
+    float dist1 = length(intersect_point1 - cur_pos);
+    float dist2 = length(intersect_point2 - cur_pos);
+    if (dist2 < dist1) { 
+      intersect_point1 = intersect_point2;
+      mat1 = mat2;
+      intersect_normal1 = intersect_normal2;
+    }
+  } else if (res2 == 0) {
+    intersect_point1 = intersect_point2;
+    mat1 = mat2;
+    intersect_normal1 = intersect_normal2;
+  }
+
+  
+  float3 reflect_dir = reflect(cur_dir, intersect_normal1);
+
+
+  float AO = ambient_occlusion(scene, intersect_point1, intersect_normal1);
+  float3 I_a = mat1.ambient * BACKGROUND_COLOR * AO;
+  float3 I_d = float3(0.0);
+  float3 I_s = float3(0.0);
+
+  for (int i = 0; i < scene.light_sources_count; ++i) {
+    float3 L = scene.light_sources[i].pos - intersect_point1;
+    float3 Ln = normalize(L);
+    float3 p1, p2, p3, p4;
+    Material mat;
+    if (ray_tracing(scene, intersect_point1, Ln, p1, p2, mat) == 0 || ray_marching(scene, intersect_point1 + Ln * DIST_MIN, Ln, p3, p4, mat) == 0) {
+      float dist = min(length(p1 - intersect_point1), length(p3 - intersect_point1));
+      if (dist < length(L)) 
+        continue;
+    }
     
+    float3 R = reflect(-Ln, intersect_normal1);
+    I_d += mat1.color * scene.light_sources[i].color * max(0.0f, dot(intersect_normal1, Ln));
+    I_s += mat1.specular * scene.light_sources[i].color * scene.light_sources[i].power * pow(max(0.0f, dot(R, -cur_dir)), mat1.reflect_n);
+  }
+  float3 color = I_a + I_d + I_s;
+  
+
+  return color + render(scene, intersect_point1, reflect_dir, iter + 1) * mat1.reflection;
 
 }
 
@@ -110,17 +209,17 @@ int main(int argc, char **argv)
   std::vector<float> image(3*W*H, 0.0f);
   
   bool input = false;
-  bool sample = false;
-  int sample_id = -1;
+  bool const_input_flag = false;
 
-  int spheres_count = 0, boxes_count = 0, planes_count = 0, light_sources_count = 0;
+  int spheres_count = 0, boxes_count = 0, planes_count = 0;
   int fractals_count = 0;
+  int lights_count = 0;
 
   Sphere *spheres; 
   Box *boxes;
   Plane *planes;
   Mundelbulb *fractals;
-  LightSource *light_sources;
+  LightSource *lights;
 
 
   Camera camera;
@@ -128,127 +227,34 @@ int main(int argc, char **argv)
   Scene scene;
 
   for (int i = 1; i < argc; ++i) {
-    if (strcmp(argv[i], "-i") == 0) {
+    if (strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "-input") == 0) {
       input = true;
+    } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--const") == 0) {
+      const_input_flag = true;
     } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
       std::cout << "-i: input mode\n-s: sample mode, provide a sample id (0-2)\n";
       return 1;
     }
   }
   if (input) {
-    std::cout << "Spheres count:\n";
-    std::cin >> spheres_count;
-    spheres = new Sphere[spheres_count];
-    for (int i = 0; i < spheres_count; ++i) {
-      float x, y, z, r;
-      std::cout << "Sphere " << i + 1 << " position <x y z>:\n";
-      std::cin >> x >> y >> z;
-      spheres[i].pos = float3(x, y, z); 
-      std::cout << "Sphere " << i + 1 << " radius:\n";
-      std::cin >> r;
-      spheres[i].r = r;
-      Material mat;
-      spheres[i].mat = mat;
-    }
-
-    std::cout << "Boxes count:\n";
-    std::cin >> boxes_count;
-    boxes = new Box[boxes_count];
-
-    for (int i = 0; i < boxes_count; ++i) {
-      float x, y, z, a, b, c;
-      std::cout << "Box " << i + 1 << " position <x y z>:\n";
-      std::cin >> x >> y >> z;
-      boxes[i].pos = float3(x, y, z); 
-      std::cout << "Box " << i + 1 << " size <a b c>:\n";
-      std::cin >> a >> b >> c;
-      boxes[i].box_size = float3(a, b, c);
-      Material mat;
-      boxes[i].mat = mat;
-    }
-
-    std::cout << "Planes count:\n";
-    std::cin >> planes_count;
-    planes = new Plane[planes_count];
-
-    for (int i = 0; i < planes_count; ++i) {
-      float x, y, z, h;
-      std::cout << "Plane " << i + 1 << " direction <x y z>:\n";
-      std::cin >> x >> y >> z;
-      planes[i].dir = normalize(float3(x, y, z)); 
-      std::cout << "Plane " << i + 1 << " height:\n";
-      std::cin >> h;
-      planes[i].h = h;
-      Material mat;
-      planes[i].mat = mat;
-    }
-
-    std::cout << "Mundelbulbs count:\n";
-    std::cin >> fractals_count;
-    fractals = new Mundelbulb[fractals_count];
-    
-    for (int i = 0; i < fractals_count; ++i) {
-      float x, y, z, bailout;
-      int iter, power;
-
-      std::cout << "Fractal " << i + 1 << " position <x y z>:\n";
-      std::cin >> x >> y >> z;
-      std::cout << "Fractal " << i + 1 << " render iterations: \n";
-      std::cin >> iter;
-      std::cout << "Fractal " << i + 1 << " power:\n";
-      std::cin >> power;
-
-      fractals[i].pos = float3(x, y, z);
-      fractals[i].iterations = iter;
-      fractals[i].power = power;
-      Material mat;
-      fractals[i].mat = mat;
-    }
-
-    std::cout << "Light sources count:\n";
-    std::cin >> light_sources_count;
-    light_sources = new LightSource[light_sources_count];
-
-    for (int i = 0; i < light_sources_count; ++i) {
-      float x, y, z, r, p;
-      std::cout << "Light source " << i + 1 << " position <x y z>:\n";
-      std::cin >> x >> y >> z;
-      light_sources[i].pos = float3(x, y, z);
-      std::cout << "Light source " << i + 1 << " radius:\n";
-      std::cin >> r;
-      light_sources[i].r = r;
-      std::cout << "Light source " << i + 1 << " power:\n";
-      std::cin >> p;
-      light_sources[i].power = p;
-      float3 col;
-      std::cout << "Light source " << i + 1 << " color <r[0-1] g[0-1] b[0-1]>:\n";
-      std::cin >> col.x >> col.y >> col.z;
-      light_sources[i].color = col; 
-    }
-
-    float cx, cy, cz;
-    std::cout << "Camera position <x y z>:\n";
-    std::cin >> cx >> cy >> cz;
-    camera.pos = float3(cx, cy, cz);
-    float dx, dy, dz;
-    std::cout << "Camera direction <x y z>:\n";
-    std::cin >> dx >> dy >> dz;
-    camera.dir = normalize(float3(dx, dy, dz));
-
-    scene = Scene{
+    input_objects(spheres, spheres_count, 
       boxes, boxes_count, 
-      spheres, spheres_count, 
       planes, planes_count, 
-      fractals, fractals_count,
-      light_sources, light_sources_count
-    };
+      fractals, fractals_count, 
+      lights, lights_count,
+      camera, 
+      scene
+    );
+  }
+  if (const_input_flag) {
+    input_const(DIST_MIN, ITER_MAX, FOV, MAX_DIST, EPS, REFLECT_ITERATIONS, DIFFUSE_RAYS_COUNT, BACKGROUND_COLOR);
   }
   std::cout << "\nRendering started...\n";
   
   for (int x = 0; x < W; ++x) {
     for (int y = 0; y < H; ++y) {
       float3 new_dir = screen_offset(camera.dir, x, y, W, H, FOV);
-      float3 col = render(scene, camera, camera.pos, new_dir);
+      float3 col = render(scene, camera.pos, new_dir, 0);
       image[get_image_index(x, y, 'r', W, H)] = col.x;
       image[get_image_index(x, y, 'g', W, H)] = col.y;
       image[get_image_index(x, y, 'b', W, H)] = col.z;

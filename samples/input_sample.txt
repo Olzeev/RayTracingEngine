@@ -1,18 +1,52 @@
 spheres count
     sphere pos
     sphere radius
+    Material
+        color
+        ambient
+        reflection
+        specular
+        reflect_power
 boxes count
     pos
     size
+    Material
+        color
+        ambient
+        reflection
+        specular
+        reflect_power
 planes count
     direction
     height
+    Material
+        color
+        ambient
+        reflection
+        specular
+        reflect_power
 fractals count
     position
     iterations
     power
+    Material
+        color
+        ambient
+        reflection
+        specular
+        reflect_power
 light sources count
     position
     power
+    color
 camera pos
 camera dir
+
+DIST_MIN;
+MAX_DIST;
+ITER_MAX;
+FOV
+EPS;
+REFLECT_ITERATIONS;
+DIFFUSE_RAYS_COUNT;
+BACKGROUND_COLOR

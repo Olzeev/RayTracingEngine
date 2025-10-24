@@ -16,3 +16,9 @@ struct Scene {
     LightSource *light_sources;
     int light_sources_count;
 };
+
+
+struct Camera {
+    float3 pos;
+    float3 dir;
+};
