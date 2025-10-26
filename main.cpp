@@ -15,17 +15,18 @@
 using LiteMath::float3, LiteMath::normalize;
 
 // GENERAL
-float FOV = PI / 2;
+float FOV_V = PI / 2;
+float FOV_H = PI / 3;
 
 // RAYMARCHING
 int ITER_MAX = 50;
 float DIST_MIN = 0.001f;
 float MAX_DIST = 10e5;
-float EPS = 0.0001f;
+float EPS = 0.00001f;
 
 // RAYTRACING
-int REFLECT_ITERATIONS = 2;
-int DIFFUSE_RAYS_COUNT = 2;
+int REFLECT_ITERATIONS = 10;
+int DIFFUSE_RAYS_COUNT = 10;
 float3 BACKGROUND_COLOR = float3(0.0);
 
 
@@ -39,27 +40,29 @@ int ray_marching(
 ) {
   
   float3 cur_intersection_point, cur_intersection_normal;
-    for (int iter = 0; iter < ITER_MAX; ++iter) {
-        float cur_min_dist = MAX_DIST;
-        Mundelbulb intersect_object;
-        for (int i = 0; i < scene.fractals_size; ++i) {
-          float dist = scene.fractals[i].sdf(cur_pos);
-          if (dist < cur_min_dist) {
-            cur_min_dist = dist;
-            intersect_object = scene.fractals[i];
-          }
+  for (int iter = 0; iter < ITER_MAX; ++iter) {
+      float cur_min_dist = MAX_DIST;
+      Fractal intersect_object;
+      for (int i = 0; i < scene.fractals_size; ++i) {
+        
+        float dist = scene.fractals[i].sdf(cur_pos);
+        if (dist < cur_min_dist) {
+          cur_min_dist = dist;
+          intersect_object = scene.fractals[i];
         }
-        if (cur_min_dist <= DIST_MIN) {
-          intersect_point = cur_pos;
-          intersect_normal = intersect_object.get_normal(cur_pos, EPS);
-          mat = intersect_object.mat;
-          return 0;
-        } else if (cur_min_dist >= MAX_DIST) {
-          return -1;
-        }
-        cur_pos = cur_pos + cur_dir * cur_min_dist;
-    }
-    return -1;
+      }
+      
+      if (cur_min_dist <= DIST_MIN) {
+        intersect_point = cur_pos;
+        intersect_normal = intersect_object.get_normal(cur_pos, EPS);
+        mat = intersect_object.mat;
+        return 0;
+      } else if (cur_min_dist >= MAX_DIST) {
+        return -1;
+      }
+      cur_pos = cur_pos + cur_dir * cur_min_dist;
+  }
+  return -1;
 }
 
 
@@ -95,16 +98,17 @@ int ray_tracing(
   }
   for (int i = 0; i < scene.planes_size; ++i) {
     float3 cur_normal;
-    float2 dist = scene.planes[i].intersection(cur_pos, cur_dir, 1e-6);
+    float2 dist = scene.planes[i].intersection(cur_pos, cur_dir, 1e-6, cur_normal);
     if (dist.x >= 0 && dist.x < cur_min_dist.x) {
       cur_min_dist = dist;
-      intersect_normal = scene.planes[i].dir;
+      intersect_normal = cur_normal;
       intersect = true;
       mat = scene.planes[i].mat;
     }
   }
   if (intersect) {
     intersect_point = cur_pos + cur_min_dist.x * cur_dir;
+    
     return 0;
   }
   return -1;
@@ -113,7 +117,7 @@ int ray_tracing(
 
 float ambient_occlusion(Scene scene, float3 point, float3 normal) {
   int cnt = 0;
-  float radius = 5.0f;
+  float radius = 10.0f;
   for (int i = 0; i < DIFFUSE_RAYS_COUNT; ++i) {
     float3 cur_dir = random_on_hemisphere(normal);
     float3 p1, p2, p3;
@@ -125,7 +129,6 @@ float ambient_occlusion(Scene scene, float3 point, float3 normal) {
       }
     }
   }
-  //std::cout << 1.0f - float(cnt) / DIFFUSE_RAYS_COUNT << '\n';
   return 1.0f - float(cnt) / DIFFUSE_RAYS_COUNT;
 }
 
@@ -141,11 +144,10 @@ float3 render(Scene scene, float3 cur_pos, float3 cur_dir, int iter) {
   Material mat2;
   int res2 = ray_tracing(scene, cur_pos, cur_dir, intersect_point2, intersect_normal2, mat2);
 
-
   if (res1 != 0 && res2 != 0) {
     return BACKGROUND_COLOR;
   }
-  if ((res1 == 0 && res2 == 0)) {
+  if (res1 == 0 && res2 == 0) {
     float dist1 = length(intersect_point1 - cur_pos);
     float dist2 = length(intersect_point2 - cur_pos);
     if (dist2 < dist1) { 
@@ -158,13 +160,11 @@ float3 render(Scene scene, float3 cur_pos, float3 cur_dir, int iter) {
     mat1 = mat2;
     intersect_normal1 = intersect_normal2;
   }
-
-  
   float3 reflect_dir = reflect(cur_dir, intersect_normal1);
 
 
   float AO = ambient_occlusion(scene, intersect_point1, intersect_normal1);
-  float3 I_a = mat1.ambient * BACKGROUND_COLOR * AO;
+  float3 I_a = mat1.color * mat1.ambient * BACKGROUND_COLOR * AO;
   float3 I_d = float3(0.0);
   float3 I_s = float3(0.0);
 
@@ -175,18 +175,31 @@ float3 render(Scene scene, float3 cur_pos, float3 cur_dir, int iter) {
     Material mat;
     if (ray_tracing(scene, intersect_point1, Ln, p1, p2, mat) == 0 || ray_marching(scene, intersect_point1 + Ln * DIST_MIN, Ln, p3, p4, mat) == 0) {
       float dist = min(length(p1 - intersect_point1), length(p3 - intersect_point1));
-      if (dist < length(L)) 
+      if (dist < length(L)){
         continue;
+      }
     }
-    
     float3 R = reflect(-Ln, intersect_normal1);
-    I_d += mat1.color * scene.light_sources[i].color * max(0.0f, dot(intersect_normal1, Ln));
+    
+    I_d += mat1.color * scene.light_sources[i].color * scene.light_sources[i].power * max(0.0f, dot(intersect_normal1, Ln));
     I_s += mat1.specular * scene.light_sources[i].color * scene.light_sources[i].power * pow(max(0.0f, dot(R, -cur_dir)), mat1.reflect_n);
   }
   float3 color = I_a + I_d + I_s;
   
+  float maxc = max(color.x, max(color.y, color.z));
+  if (maxc > 1.0f) {
+    color /= maxc;
+  } 
+  
+  float reflection_strength = min(mat1.reflection, 1.0f - length(color) / float(sqrt(3)));
+  float recursion_attenuation = pow(0.8f, iter);
 
-  return color + render(scene, intersect_point1, reflect_dir, iter + 1) * mat1.reflection;
+  float3 total_color = color + render(scene, intersect_point1, reflect_dir, iter + 1) * reflection_strength * recursion_attenuation;
+  maxc = max(total_color.x, max(total_color.y, total_color.z));
+  if (maxc > 1.0f) {
+    total_color /= maxc;
+  }
+  return total_color;
 
 }
 
@@ -204,9 +217,9 @@ int get_image_index(int x, int y, char c, const int W, const int H) {
 
 int main(int argc, char **argv)
 {
-  constexpr int W = 1024;
-  constexpr int H = 1024;
-  std::vector<float> image(3*W*H, 0.0f);
+  int W = 1024;
+  int H = 1024;
+  
   
   bool input = false;
   bool const_input_flag = false;
@@ -218,7 +231,7 @@ int main(int argc, char **argv)
   Sphere *spheres; 
   Box *boxes;
   Plane *planes;
-  Mundelbulb *fractals;
+  Fractal *fractals;
   LightSource *lights;
 
 
@@ -227,33 +240,29 @@ int main(int argc, char **argv)
   Scene scene;
 
   for (int i = 1; i < argc; ++i) {
-    if (strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "-input") == 0) {
-      input = true;
-    } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--const") == 0) {
+    if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--const") == 0) {
       const_input_flag = true;
     } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-      std::cout << "-i: input mode\n-s: sample mode, provide a sample id (0-2)\n";
-      return 1;
+      std::cout << "-c, --const: customize constanst\nYou can use input samples from 'samples' directory!\n";
+      return 0;
     }
   }
-  if (input) {
-    input_objects(spheres, spheres_count, 
-      boxes, boxes_count, 
-      planes, planes_count, 
-      fractals, fractals_count, 
-      lights, lights_count,
-      camera, 
-      scene
-    );
-  }
+  input_objects(spheres, spheres_count, 
+    boxes, boxes_count, 
+    planes, planes_count, 
+    fractals, fractals_count,
+    lights, lights_count,
+    camera, 
+    scene
+  );
   if (const_input_flag) {
-    input_const(DIST_MIN, ITER_MAX, FOV, MAX_DIST, EPS, REFLECT_ITERATIONS, DIFFUSE_RAYS_COUNT, BACKGROUND_COLOR);
+    input_const(W, H, DIST_MIN, ITER_MAX, FOV_H, FOV_V, MAX_DIST, EPS, REFLECT_ITERATIONS, DIFFUSE_RAYS_COUNT, BACKGROUND_COLOR);
   }
+  std::vector<float> image(3*W*H, 0.0f);
   std::cout << "\nRendering started...\n";
-  
   for (int x = 0; x < W; ++x) {
     for (int y = 0; y < H; ++y) {
-      float3 new_dir = screen_offset(camera.dir, x, y, W, H, FOV);
+      float3 new_dir = screen_offset(camera.dir, x, y, W, H, FOV_H, FOV_V);
       float3 col = render(scene, camera.pos, new_dir, 0);
       image[get_image_index(x, y, 'r', W, H)] = col.x;
       image[get_image_index(x, y, 'g', W, H)] = col.y;

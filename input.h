@@ -19,7 +19,7 @@ void input_material(Material &mat) {
 void input_objects(Sphere *spheres, int &spheres_count, 
     Box *boxes, int &boxes_count, 
     Plane *planes, int &planes_count, 
-    Mundelbulb *fractals, int &fractals_count, 
+    Fractal *fractals, int &fractals_count, 
     LightSource *lights, int &lights_count,
     Camera &camera, 
     Scene &scene
@@ -75,27 +75,47 @@ void input_objects(Sphere *spheres, int &spheres_count,
       planes[i].mat = mat;
     }
 
-    std::cout << "Mundelbulbs count:\n";
+    std::cout << "Fractals count:\n";
     std::cin >> fractals_count;
-    fractals = new Mundelbulb[fractals_count];
+    fractals = new Fractal[fractals_count];
     
     for (int i = 0; i < fractals_count; ++i) {
-      float x, y, z, bailout;
-      int iter, power;
+      int type1, iter;
+      float x, y, z;
+      std::cout << "Fractal " << i + 1 << " type (1 - Mundelbulb, 2 - Serpinskiy traingle):\n";
+      std::cin >> type1;
+      fractals[i].type = type1;
+      if (type1 == 1) {
+        int power;
 
-      std::cout << "Fractal " << i + 1 << " position <x y z>:\n";
-      std::cin >> x >> y >> z;
-      std::cout << "Fractal " << i + 1 << " render iterations: \n";
-      std::cin >> iter;
-      std::cout << "Fractal " << i + 1 << " power:\n";
-      std::cin >> power;
+        std::cout << "Mundelbulb " << i + 1 << " position <x y z>:\n";
+        std::cin >> x >> y >> z;
+        std::cout << "Mundelbulb " << i + 1 << " render iterations: \n";
+        std::cin >> iter;
+        std::cout << "Mundelbulb " << i + 1 << " power:\n";
+        std::cin >> power;
 
-      fractals[i].pos = float3(x, y, z);
-      fractals[i].iterations = iter;
-      fractals[i].power = power;
-      Material mat;
-      input_material(mat);
-      fractals[i].mat = mat;
+        fractals[i].pos = float3(x, y, z);
+        fractals[i].iterations = iter;
+        fractals[i].power = power;
+        Material mat;
+        input_material(mat);
+        fractals[i].mat = mat;
+      } else if (type1 == 2) {
+
+        std::cout << "Triangle " << i + 1 << " position <x y z>:\n";
+        std::cin >> x >> y >> z;
+        std::cout << "Triangle " << i + 1 << " render iterations: \n";
+        std::cin >> iter;
+
+        fractals[i].pos = float3(x, y, z);
+        fractals[i].iterations = iter;
+        fractals[i].scale = 2.0;
+        Material mat;
+        input_material(mat);
+        fractals[i].mat = mat;
+      }
+      
     }
 
     std::cout << "Light sources count:\n";
@@ -109,10 +129,10 @@ void input_objects(Sphere *spheres, int &spheres_count,
       std::cout << "Light source " << i + 1 << " position <x y z>:\n";
       std::cin >> x >> y >> z;
       lights[i].pos = float3(x, y, z);
-      std::cout << "Light source " << i + 1 << "power:\n";
+      std::cout << "Light source " << i + 1 << " power:\n";
       std::cin >> p;
       lights[i].power = p;
-      std::cout << "Light source " << i + 1 << "color <r[0-1] g[0-1] b[0-1]>:\n";
+      std::cout << "Light source " << i + 1 << " color <r[0-1] g[0-1] b[0-1]>:\n";
       std::cin >> r >> g >> b;
       lights[i].color = float3(r, g, b);
     }
@@ -136,25 +156,34 @@ void input_objects(Sphere *spheres, int &spheres_count,
 }
 
 void input_const(
+  int &width, int &height,
   float &DIST_MIN, 
   int &ITER_MAX, 
-  float &FOV,
+  float &FOV_H, float &FOV_V,
   float &MAX_DIST, 
   float &EPS, 
   int &REFLECT_ITERATIONS, 
   int &DIFFUSE_RAYS_COUNT, 
   float3 &BACKGROUND_COLOR
 ) {
-  std::cout << "Min distance:\n";
+  std::cout << "Ray marching minimum distance:\n";
   std::cin >> DIST_MIN;
-  std::cout << "Max distance:\n";
+  std::cout << "Ray marching maximum distance:\n";
   std::cin >> MAX_DIST;
-  std::cout << "Max raymarching iiterations:\n";
+  std::cout << "Raymarching iterations:\n";
   std::cin >> ITER_MAX;
-  std::cout << "FOV (Pi * ...):\n";
+
+  std::cout << "Output image width:\n";
+  std::cin >> width;
+  std::cout << "Output image height:\n";
+  std::cin >> height;
+  std::cout << "Horizontal FOV (Pi / ...):\n";
   float c;
   std::cin >> c;
-  FOV = 3.14159265359 * c;
+  FOV_H = 3.14159265359 / c;
+  std::cout << "Vertical FOV (Pi / ...):\n";
+  std::cin >> c;
+  FOV_V = 3.14159265359 / c;
   std::cout << "Epsilon:\n";
   std::cin >> EPS;
   std::cout << "Raytracing iterations:\n";

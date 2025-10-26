@@ -26,15 +26,26 @@ planes count
         specular
         reflect_power
 fractals count
-    position
-    iterations
-    power
-    Material
-        color
-        ambient
-        reflection
-        specular
-        reflect_power
+    type
+    1:
+        position
+        iterations
+        power
+        Material
+            color
+            ambient
+            reflection
+            specular
+            reflect_power
+    2:
+        position
+        iterations
+        Material
+            color
+            ambient
+            reflection
+            specular
+            reflect_power
 light sources count
     position
     power
@@ -42,11 +53,15 @@ light sources count
 camera pos
 camera dir
 
-DIST_MIN;
-MAX_DIST;
-ITER_MAX;
-FOV
-EPS;
-REFLECT_ITERATIONS;
-DIFFUSE_RAYS_COUNT;
+MIN_DIST
+MAX_DIST
+ITER_MAX
+
+IMAGE_WIDTH
+IMAGE_HEIGHT
+FOV_H
+FOV_V
+EPS
+REFLECT_ITERATIONS
+DIFFUSE_RAYS_COUNT
 BACKGROUND_COLOR

@@ -1,11 +1,5 @@
 build:
-	g++ main.cpp scene.h custom_utils.h public_image.h objects.h input.h -o main
-
-run:
-	./main -i
-
-run_s:
-	./main -i < samples/input2.txt
+	g++ main.cpp scene.h custom_utils.h public_image.h objects.h input.h LiteMath.h stb_image_write.h stb_image.h -o main
 
 clean:
 	rm main

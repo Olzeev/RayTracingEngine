@@ -59,22 +59,6 @@ struct Box {
         float dz = (sdf(point + float3(0, 0, EPS)) - sdf(point - float3(0, 0, EPS)));
         return normalize(float3(dx, dy, dz) / 2.0 / EPS);
     }
-
-    private: 
-    float3 step_alt(float3 edge, float3 x) {
-        return float3(
-            x.x >= edge.x ? 1.0f : 0.0f,
-            x.y >= edge.y ? 1.0f : 0.0f,
-            x.z >= edge.z ? 1.0f : 0.0f
-        );
-    }
-    float3 sign_alt(float3 x) {
-        return float3(
-            x.x > 0.0f ? 1.0f : (x.x < 0.0f ? -1.0f : 0.0f),
-            x.y > 0.0f ? 1.0f : (x.y < 0.0f ? -1.0f : 0.0f),
-            x.z > 0.0f ? 1.0f : (x.z < 0.0f ? -1.0f : 0.0f)
-        );
-    }
 };
 
 struct Sphere {
@@ -113,12 +97,12 @@ struct Plane {
         return dot(p, dir) + h;
     }
 
-    float2 intersection(float3 ray_pos, float3 ray_dir, float EPS)
+    float2 intersection(float3 ray_pos, float3 ray_dir, float EPS, float3 &normal)
     {
         
         // Проверяем параллельность
         float denom = dot(ray_dir, dir);
-        if(abs(denom) < EPS) 
+        if(fabs(denom) < EPS) 
             return float2(-1.0, -1.0); // Нет пересечения
         
         // Вычисляем расстояние
@@ -127,6 +111,12 @@ struct Plane {
         // Проверяем, что пересечение впереди
         if(t < EPS) 
             return float2(-1.0, -1.0);
+
+        normal = dir;
+        if (dot(ray_dir, normal) > 0) {
+            normal = -normal;
+        }
+        
         return float2(t, t); // или float2(t, 0.0) в зависимости от контекста
     }
 
@@ -149,36 +139,77 @@ struct LightSource {
 };
 
 
-struct Mundelbulb {
+struct Fractal {
+    int type;
     float3 pos;
     int iterations;
     int power;
+    float scale;
     Material mat;
 
     float sdf(float3 point) {
-        float3 z = point - pos;
-        float dr = 1.0;
-        float r = 0.0;
+        if (type == 1) {
+            float3 z = point - pos;
+            float dr = 1.0;
+            float r = 0.0;
 
-        for (int i = 0; i < iterations ; i++) {
-            r = length(z);
-            if (r > 2.0) break;
+            for (int i = 0; i < iterations ; i++) {
+                r = length(z);
+                if (r > 2.0) break;
+                
+                // convert to polar coordinates
+                float theta = acos(z.z / r);
+                float phi = atan2(z.y, z.x);
+                dr = pow(r, power - 1.0) * power * dr + 1.0;
+                
+                // scale and rotate the point
+                float zr = pow(r, power);
+                theta = theta * power;
+                phi = phi * power;
+                
+                // convert back to cartesian coordinates
+                z = zr * float3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta));
+                z += point - pos;
+            }
+            return 0.5 * log(r) * r / dr;
+        } else {
+            // Вершины тетраэдра (единичного)
+            const float3 verts[4] = {
+                float3( -0.5f, 0.0f,  -1.0 / 2 / sqrt(3)),  // основание
+                float3(0.5f, 0.0f,  -1.0 / 2 / sqrt(3)),  // основание
+                float3( 0.0f, 0.0f, sqrt(3) / 2),  // основание
+                float3( 0.0f, sqrt(2.0 / 3.0),  0.0f)   // вершина сверху
+            };
+            float3 p = point - pos;
+            float3 q = p;
+            float scale = 1.0f;
+            float thickness = 0.001f;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                // Находим ближайшую вершину
+                float d0 = length(q - verts[0]);
+                float d1 = length(q - verts[1]);
+                float d2 = length(q - verts[2]);
+                float d3 = length(q - verts[3]);
+
+                int id = 0;
+                float dmin = d0;
+                if (d1 < dmin) { dmin = d1; id = 1; }
+                if (d2 < dmin) { dmin = d2; id = 2; }
+                if (d3 < dmin) { dmin = d3; id = 3; }
+
+                // Инвертируем и масштабируем пространство
+                q = q * 2.0f - verts[id];
+                scale *= 2.0f;
+            }
+
+            // Расстояние до тетраэдра (аппроксимация)
+            float dist = (length(q) - 1.0f) / scale;
+            return dist;
             
-            // convert to polar coordinates
-            float theta = acos(z.z / r);
-            float phi = atan2(z.y, z.x);
-            dr = pow(r, power - 1.0) * power * dr + 1.0;
-            
-            // scale and rotate the point
-            float zr = pow(r, power);
-            theta = theta * power;
-            phi = phi * power;
-            
-            // convert back to cartesian coordinates
-            z = zr * float3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta));
-            z += point - pos;
         }
-        return 0.5 * log(r) * r / dr;
+        
     }
 
     float3 get_normal(float3 point, float EPS) {
