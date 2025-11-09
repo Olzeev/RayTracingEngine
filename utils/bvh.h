@@ -122,7 +122,7 @@ BVH_Node *build_bvh(std::vector <Triangle> &tr, int depth) {
 }
 
 
-float bvh_traverse(BVH_Node *cur, float3 ray_pos, float3 ray_dir, float3 &normal) {
+float bvh_traverse(BVH_Node *cur, float3 pos, float3 ray_pos, float3 ray_dir, float3 &normal) {
     if (cur->type == 1) {
         float min_dist = std::numeric_limits<float>::max();
         int intersect = 0;
@@ -133,7 +133,7 @@ float bvh_traverse(BVH_Node *cur, float3 ray_pos, float3 ray_dir, float3 &normal
             float3 cur_normal;
             if (ray_triangle_intersect(
                 ray_pos, ray_dir, 
-                cur->triangles[i].vert[0], cur->triangles[i].vert[1], cur->triangles[i].vert[2], 
+                cur->triangles[i].vert[0] + pos, cur->triangles[i].vert[1] + pos, cur->triangles[i].vert[2] + pos, 
                 &cur_dist, &cur_normal
             )) {
                 if (!intersect || cur_dist < min_dist) {
@@ -148,11 +148,11 @@ float bvh_traverse(BVH_Node *cur, float3 ray_pos, float3 ray_dir, float3 &normal
         return -1.0f;
     }
 
-    if (ray_box_intersect(cur->box, ray_pos, ray_dir)) {
+    if (ray_box_intersect(cur->box, pos, ray_pos, ray_dir)) {
         float3 normal1;
-        float res1 = bvh_traverse(cur->left, ray_pos, ray_dir, normal1);
+        float res1 = bvh_traverse(cur->left, pos, ray_pos, ray_dir, normal1);
         float3 normal2;
-        float res2 = bvh_traverse(cur->right, ray_pos, ray_dir, normal2);
+        float res2 = bvh_traverse(cur->right, pos, ray_pos, ray_dir, normal2);
         if (res1 >= 0 && res2 >= 0) {
             if (res1 <= res2) {
                 normal = normal1;

@@ -28,8 +28,8 @@ using LiteMath::uint2;
 using LiteMath::uint3;
 using LiteMath::uint4;
 
-static constexpr int SCREEN_WIDTH  = 1280;
-static constexpr int SCREEN_HEIGHT = 720;
+static constexpr int SCREEN_WIDTH  = 640;
+static constexpr int SCREEN_HEIGHT = 480;
 
 float rad_to_deg(float rad) { return rad * 180.0f / M_PI; }
 
@@ -43,7 +43,7 @@ uint32_t float3_to_RGBA8(float3 c)
 
 
 void render(const Camera &camera, uint32_t *out_image, int W, int H, 
-  Object models[], int models_count
+  Object objects[], int objects_count
 )
 {
 
@@ -59,9 +59,9 @@ void render(const Camera &camera, uint32_t *out_image, int W, int H,
       float min_dist = std::numeric_limits<float>::max();
       float3 normal;
 
-      for (int i = 0; i < models_count; ++i) {
+      for (int i = 0; i < objects_count; ++i) {
         float3 cur_normal;
-        float cur_dist = bvh_traverse(models[i].bvh, camera.pos, cur_dir, cur_normal);
+        float cur_dist = bvh_traverse(objects[i].model->bvh, objects[i].pos, camera.pos, cur_dir, cur_normal);
         if (cur_dist >= 0) {
           if (!intersection || cur_dist < min_dist) {
             min_dist = cur_dist;
@@ -78,6 +78,26 @@ void render(const Camera &camera, uint32_t *out_image, int W, int H,
   }
 }
 
+void get_triangles(Model &model, cmesh4::SimpleMesh &mesh) {
+  size_t m_tr_num = mesh.IndicesNum() / 3;      
+  for (size_t j = 0; j < m_tr_num; ++j) {
+    unsigned int i0 = mesh.indices[3*j + 0];
+    unsigned int i1 = mesh.indices[3*j + 1];
+    unsigned int i2 = mesh.indices[3*j + 2];
+
+    float4 v0 = mesh.vPos4f[i0];
+    float4 v1 = mesh.vPos4f[i1];
+    float4 v2 = mesh.vPos4f[i2];
+    Triangle tr;
+    tr.vert[0] = float3(v0.x, v0.y, v0.z);
+    tr.vert[1] = float3(v1.x, v1.y, v1.z);
+    tr.vert[2] = float3(v2.x, v2.y, v2.z);
+    tr.center_pos = (tr.vert[0] + tr.vert[1] + tr.vert[2]) / 3;
+    tr.ind = j;
+    model.tr.push_back(tr);
+  }
+}
+
 
 // You must include the command line parameters for your main function to be recognized by SDL
 int main(int argc, char **args)
@@ -86,30 +106,25 @@ int main(int argc, char **args)
   std::vector<uint32_t> pixels(SCREEN_WIDTH * SCREEN_HEIGHT, 0xFFFFFFFF); // Initialize with white pixels
   
   //cmesh4::SimpleMesh mesh = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
-  cmesh4::SimpleMesh bunny = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
-  Object objects[1];
+  cmesh4::SimpleMesh bunny_mesh = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
+  Model bunny;
+  get_triangles(bunny, bunny_mesh);
   
-  size_t m_tr_num = bunny.IndicesNum() / 3;      
-  for (size_t j = 0; j < m_tr_num; ++j) {
-    unsigned int i0 = bunny.indices[3*j + 0];
-    unsigned int i1 = bunny.indices[3*j + 1];
-    unsigned int i2 = bunny.indices[3*j + 2];
-
-    float4 v0 = bunny.vPos4f[i0];
-    float4 v1 = bunny.vPos4f[i1];
-    float4 v2 = bunny.vPos4f[i2];
-    Triangle tr;
-    tr.vert[0] = float3(v0.x, v0.y, v0.z);
-    tr.vert[1] = float3(v1.x, v1.y, v1.z);
-    tr.vert[2] = float3(v2.x, v2.y, v2.z);
-    tr.center_pos = (tr.vert[0] + tr.vert[1] + tr.vert[2]) / 3;
-    tr.ind = j;
-    objects[0].tr.push_back(tr);
-  }
-  objects[0].pos = float3(0.0f);
-  std::cout << "Building BVH...\n";
-  objects[0].bvh = build_bvh(objects[0].tr, 0);
+  std::cout << "Building bunny BVH...\n";
+  bunny.bvh = build_bvh(bunny.tr, 0);
   std::cout << "BVH built!\n";
+
+  
+
+
+  int objects_count = 10;
+  Object objects[objects_count];
+  for (int i = 0; i < objects_count; ++i) {
+    objects[i].pos = float3(i * 2, 0, 0);
+    objects[i].model = &bunny;
+  }
+
+  //tl_bvh = build_tl_bvh(objects, objects_count);
 
   // Initialize SDL. SDL_Init will return -1 if it fails.
   if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
@@ -244,7 +259,7 @@ int main(int argc, char **args)
     
 
     // Render the scene
-    render(camera, pixels.data(), SCREEN_WIDTH, SCREEN_HEIGHT, objects, 1);
+    render(camera, pixels.data(), SCREEN_WIDTH, SCREEN_HEIGHT, objects, objects_count);
 
     // Update the texture with the pixel buffer
     SDL_UpdateTexture(texture, nullptr, pixels.data(), SCREEN_WIDTH * sizeof(uint32_t));

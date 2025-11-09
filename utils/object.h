@@ -3,8 +3,12 @@
 
 using LiteMath::float3;
 
-struct Object {
-    float3 pos;
+struct Model {
     BVH_Node *bvh;
     std::vector <Triangle> tr;
+};
+
+struct Object {
+    float3 pos;
+    Model *model;
 };

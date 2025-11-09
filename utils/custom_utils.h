@@ -39,7 +39,7 @@ bool ray_triangle_intersect(float3 orig, float3 dir,
     return *t > EPS;
 }
 
-bool ray_box_intersect(AABB& box, const float3& ro, const float3& rd)
+bool ray_box_intersect(AABB& box, float3 pos, const float3& ro, const float3& rd)
 {
     // избегаем деления на 0
     float3 invDir = float3(
@@ -48,8 +48,8 @@ bool ray_box_intersect(AABB& box, const float3& ro, const float3& rd)
         (fabsf(rd.z) > 1e-8f) ? 1.0f / rd.z : 1e8f
     );
 
-    const float3 minB = box.pos - box.size;
-    const float3 maxB = box.pos + box.size;
+    const float3 minB = box.pos + pos - box.size;
+    const float3 maxB = box.pos + pos + box.size;
 
     const float3 t1 = (minB - ro) * invDir;
     const float3 t2 = (maxB - ro) * invDir;
