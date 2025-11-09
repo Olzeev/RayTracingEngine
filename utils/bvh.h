@@ -186,13 +186,15 @@ float bvh_traverse(BVH_Node *cur, float3 pos, float3 ray_pos, float3 ray_dir, fl
 AABB generate_tl_aabb(std::vector <Object> objects, int obj_count) {
     float3 min_coord = objects[0].pos;
     float3 max_coord = min_coord;
+    float3 max_size = objects[0].model->size;
     for (int i = 1; i < obj_count; ++i) {
         min_coord = LiteMath::min(objects[i].pos, min_coord);
         max_coord = LiteMath::max(objects[i].pos, max_coord);
+        max_size = LiteMath::max(objects[i].model->size, max_size);
     }
     AABB res;
     res.pos = (min_coord + max_coord) / 2.0f;
-    res.size = (max_coord - min_coord + 1.0f) / 2.0f;
+    res.size = (max_coord - min_coord + max_size) / 2.0f;
     return res;
 }
 

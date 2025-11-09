@@ -30,6 +30,7 @@ using LiteMath::uint4;
 
 static constexpr int SCREEN_WIDTH  = 640;
 static constexpr int SCREEN_HEIGHT = 480;
+bool shadow = false;
 
 
 uint32_t float3_to_RGBA8(float3 c)
@@ -43,7 +44,7 @@ uint32_t float3_to_RGBA8(float3 c)
 
 void render(const Camera &camera, uint32_t *out_image, int W, int H, TLBVH_Node *tl_bvh)
 {
-
+  float3 light_source = normalize(float3(-1, 1, 0.2));
   #pragma omp parallel for collapse(2)
   for (int y=0;y<H;y++)
   {
@@ -53,16 +54,23 @@ void render(const Camera &camera, uint32_t *out_image, int W, int H, TLBVH_Node 
       float3 color = float3(0.0f);
       float3 normal;
       float cur_dist = tl_bvh_traverse(tl_bvh, camera.pos, cur_dir, normal);
+      
         
       if (cur_dist >= 0) {
-        color = float3(0.2f + dot(normal, normalize(float3(-1, 1, 0.2))));
+        float3 normal1;
+        if (shadow && tl_bvh_traverse(tl_bvh, camera.pos + cur_dist * cur_dir * 0.9999f, light_source, normal1) >= 0) {
+          color = float3(0.2f + dot(normal, light_source) * 0.2);
+        } else {
+          color = float3(0.2f + dot(normal, light_source));
+        }
+        
       }
       out_image[y*W + x] = float3_to_RGBA8(color);
     }
   }
 }
 
-void get_triangles(Model &model, cmesh4::SimpleMesh &mesh) {
+void get_triangles(Model &model, cmesh4::SimpleMesh &mesh, float3 size=float3(1.0f)) {
   size_t m_tr_num = mesh.IndicesNum() / 3;
   float4 min_coord = mesh.vPos4f[mesh.indices[0]];
   float4 max_coord = min_coord; 
@@ -96,7 +104,7 @@ void get_triangles(Model &model, cmesh4::SimpleMesh &mesh) {
   );
   for (int i = 0; i < m_tr_num; ++i) {
     for (int j = 0; j < 3; ++j) {
-      model.tr[i].vert[j] = (model.tr[i].vert[j] - center) / size_max;
+      model.tr[i].vert[j] = (model.tr[i].vert[j] - center) / size_max * size;
     }
   }
 
@@ -108,40 +116,152 @@ int main(int argc, char **args)
 {
   // Pixel buffer (RGBA format)
   std::vector<uint32_t> pixels(SCREEN_WIDTH * SCREEN_HEIGHT, 0xFFFFFFFF); // Initialize with white pixels
-  
-  cmesh4::SimpleMesh bunny_mesh = cmesh4::LoadMeshFromObj("models/SP2_Gun.obj", true);
-  Model bunny;
-  get_triangles(bunny, bunny_mesh);
-  
-  std::cout << "Building bunny BVH...\n";
-  bunny.bvh = build_bvh(bunny.tr, 0);
-  std::cout << "BVH built!\n";
 
-/*
-  cmesh4::SimpleMesh gun_mesh = cmesh4::LoadMeshFromObj("models/SP2_Gun.obj", true);
-  Model gun;
-  get_triangles(gun, gun_mesh);
   
-  std::cout << "Building gun BVH...\n";
-  gun.bvh = build_bvh(gun.tr, 0);
-  std::cout << "BVH built!\n";
-*/
-  std::vector <Object> objects(1);
-  objects[0].pos = float3(0.0f);
-  objects[0].model = &bunny;
+
+  int b_count = 0, g_count = 0, m_count = 0, c_count = 0;
   
-  /*
-  std::vector <Object> objects(100);
-  for (int i = 0; i < 10; ++i) {
-    for (int j = 0; j < 10; ++j) {
-      objects[i * 10 + j].pos = float3(i * 2, 0, j * 2);
-      objects[i * 10 + j].model = &bunny;
+  for (int i = 1; i < argc; ++i) {
+    if (strcmp(args[i], "-bunny") == 0) {
+      std::cout << "Bunnies count:\n";
+      std::cin >> b_count;
+    } else if (strcmp(args[i], "-gun") == 0) {
+      std::cout << "Guns count:\n";
+      std::cin >> g_count;
+    } else if (strcmp(args[i], "-cube") == 0) {
+      std::cout << "Cubes count:\n";
+      std::cin >> c_count;
+    } else if (strcmp(args[i], "-cyl") == 0) {
+      std::cout << "Cylinders count:\n";
+      std::cin >> m_count;
+    } else if (strcmp(args[i], "-shadow") == 0) {
+      shadow = true;
     }
-    
   }
-    */
+  cmesh4::SimpleMesh gun_mesh, bunny_mesh, cyl_mesh;
+  cmesh4::SimpleMesh cube_mesh = cmesh4::LoadMeshFromObj("models/cube.obj", true);
+  
+  Model gun, cube, bunny, cyl;
 
+
+  if (g_count > 0) {
+    gun_mesh = cmesh4::LoadMeshFromObj("models/SP2_Gun.obj", true);
+    get_triangles(gun, gun_mesh);
+    
+    std::cout << "Building gun BVH...\n";
+    gun.bvh = build_bvh(gun.tr, 0);
+    std::cout << "BVH built!\n";
+  }
+  if (c_count > 0) {
+    get_triangles(cube, cube_mesh);
+    std::cout << "Building cube BVH...\n";
+    cube.bvh = build_bvh(cube.tr, 0);
+    std::cout << "BVH built!\n";
+  }
+  if (b_count > 0) {
+    bunny_mesh = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
+    get_triangles(bunny, bunny_mesh);
+    
+    std::cout << "Building bunny BVH...\n";
+    bunny.bvh = build_bvh(bunny.tr, 0);
+    std::cout << "BVH built!\n";
+  }
+  if (m_count > 0) {
+    cyl_mesh = cmesh4::LoadMeshFromObj("models/MotorcycleCylinderHead.obj", true);
+    get_triangles(cyl, cyl_mesh);
+    
+    std::cout << "Building cylinder BVH...\n";
+    cyl.bvh = build_bvh(cyl.tr, 0);
+    std::cout << "BVH built!\n";
+  }
+  std::vector <Object> objects;
+  int ind = 0;
+  int g1 = g_count / 10;
+  for (int i = 0; i < g1; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      Object obj;
+      obj.pos = float3(ind * 2.0f, 0.0f, (j - 5) * 2);
+      obj.model = &gun;
+      objects.push_back(obj);
+      
+    }
+    ind++;
+  }
+  for (int j = 0; j < g_count % 10; ++j) {
+    Object obj;
+    obj.pos = float3(ind * 2.0f, 0.0f, (j - (g_count % 10) / 2) * 2);
+    obj.model = &gun;
+    objects.push_back(obj);
+  }
+  ind++;
+  int c1 = c_count / 10;
+  for (int i = 0; i < c1; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      Object obj;
+      obj.pos = float3(ind * 2.0f, 0.0f, (j - 5) * 2);
+      obj.model = &cube;
+      objects.push_back(obj);
+    }
+    ind++;
+  }
+  for (int j = 0; j < c_count % 10; ++j) {
+    Object obj;
+    obj.pos = float3(ind * 2.0f, 0.0f, (j - (c_count % 10) / 2) * 2);
+    obj.model = &cube;
+    objects.push_back(obj);
+  }
+  ind++;
+  int m1 = m_count / 10;
+  for (int i = 0; i < m1; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      Object obj;
+      obj.pos = float3(ind * 2.0f, 0.0f, (j - 5) * 2);
+      obj.model = &cyl;
+      objects.push_back(obj);
+    }
+    ind++;
+  }
+  for (int j = 0; j < m_count % 10; ++j) {
+    Object obj;
+    obj.pos = float3(ind * 2.0f, 0.0f, (j - (m_count % 10) / 2) * 2);
+    obj.model = &cyl;
+    objects.push_back(obj);
+  }
+  ind++;
+  int b1 = b_count / 10;
+  for (int i = 0; i < b1; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      Object obj;
+      obj.pos = float3(ind * 2.0f, 0.0f, (j - 5) * 2);
+      obj.model = &bunny;
+      objects.push_back(obj);
+    }
+    ind++;
+  }
+  for (int j = 0; j < b_count % 10; ++j) {
+    Object obj;
+    obj.pos = float3(ind * 2.0f, 0.0f, (j - (b_count % 10) / 2) * 2);
+    obj.model = &bunny;
+    objects.push_back(obj);
+  }
+  Model floor;
+  if (shadow) {
+    
+    get_triangles(floor, cube_mesh, float3(100, 0.2, 100));
+    floor.size = float3(100, 0.2, 100);
+    std::cout << "Building floor BVH...\n";
+    floor.bvh = build_bvh(floor.tr, 0);
+    std::cout << "BVH built!\n";
+    Object fl;
+    fl.pos = float3(0, -1, 0);
+    fl.model = &floor;
+    objects.push_back(fl);
+  }
+  
+
+  std::cout << "Building top-level BVH...\n";
   TLBVH_Node *tl_bvh = build_tl_bvh(objects);
+  std::cout << "Top-lever BVH built!\n";
 
   // Initialize SDL. SDL_Init will return -1 if it fails.
   if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
@@ -194,8 +314,8 @@ int main(int argc, char **args)
   bool running = true;
 
   Camera camera;
-  camera.pos = float3(-3, 0, 0);
-  camera.dir = float3(1, 0, 0);
+  camera.pos = float3(-3, 2, 0);
+  camera.dir = normalize(float3(1, -0.2, 0));
   camera.angle_x = 0.0f;
   camera.angle_y = 0.0f;
   camera.speed = 2.0f;
