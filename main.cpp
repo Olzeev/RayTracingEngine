@@ -1,7 +1,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
-#include "utils/mesh.h"
+
 #include "utils/public_camera.h"
 #include "utils/public_image.h"
 
@@ -14,8 +14,9 @@
 #include <SDL.h>
 #include <chrono>
 #include "utils/LiteMath.h"
+#include "utils/object.h"
 
-#include "custom_utils.h"
+
 
 using LiteMath::float2;
 using LiteMath::float3;
@@ -40,8 +41,9 @@ uint32_t float3_to_RGBA8(float3 c)
   return 0xFF000000 | (r<<16) | (g<<8) | b;
 }
 
+
 void render(const Camera &camera, uint32_t *out_image, int W, int H, 
-  cmesh4::SimpleMesh models[], int models_count
+  Object models[], int models_count
 )
 {
 
@@ -54,46 +56,23 @@ void render(const Camera &camera, uint32_t *out_image, int W, int H,
       float3 color = float3(0.0f);
 
       char intersection = 0;
-      float min_dist;
+      float min_dist = std::numeric_limits<float>::max();
       float3 normal;
 
       for (int i = 0; i < models_count; ++i) {
-        size_t m_tr_num = models[i].IndicesNum() / 3;
-
-        
-        
-        for (size_t j = 0; j < m_tr_num; ++j) {
-          float dist;
-          float3 cur_normal;
-          unsigned int i0 = models[i].indices[3*j + 0];
-          unsigned int i1 = models[i].indices[3*j + 1];
-          unsigned int i2 = models[i].indices[3*j + 2];
-
-          float4 v0 = models[i].vPos4f[i0];
-          float4 v1 = models[i].vPos4f[i1];
-          float4 v2 = models[i].vPos4f[i2];
-          if (ray_triangle_intersect(
-            camera.pos, cur_dir, 
-            float3(v0.x, v0.y, v0.z), 
-            float3(v1.x, v1.y, v1.z), 
-            float3(v2.x, v2.y, v2.z), 
-            &dist, &cur_normal)) 
-          {
-            
-            if (!intersection || dist < min_dist) {
-              min_dist = dist;
-              normal = cur_normal;
-            }
+        float3 cur_normal;
+        float cur_dist = bvh_traverse(models[i].bvh, camera.pos, cur_dir, cur_normal);
+        if (cur_dist >= 0) {
+          if (!intersection || cur_dist < min_dist) {
+            min_dist = cur_dist;
+            normal = cur_normal;
             intersection = 1;
           }
         }
-        if (intersection) {
-          color = float3(dot(normal, normalize(float3(1.0f, 1.0f, 0.5f))));
-        } else {
-          color = float3(0.1f);
-        }
       }
-
+      if (intersection) {
+        color = float3(0.2f + dot(normal, normalize(float3(-1, 1, 0.2))));
+      }
       out_image[y*W + x] = float3_to_RGBA8(color);
     }
   }
@@ -107,7 +86,30 @@ int main(int argc, char **args)
   std::vector<uint32_t> pixels(SCREEN_WIDTH * SCREEN_HEIGHT, 0xFFFFFFFF); // Initialize with white pixels
   
   //cmesh4::SimpleMesh mesh = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
-  cmesh4::SimpleMesh objects[1] = {cmesh4::LoadMeshFromObj("models/cube.obj", true)};
+  cmesh4::SimpleMesh bunny = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
+  Object objects[1];
+  
+  size_t m_tr_num = bunny.IndicesNum() / 3;      
+  for (size_t j = 0; j < m_tr_num; ++j) {
+    unsigned int i0 = bunny.indices[3*j + 0];
+    unsigned int i1 = bunny.indices[3*j + 1];
+    unsigned int i2 = bunny.indices[3*j + 2];
+
+    float4 v0 = bunny.vPos4f[i0];
+    float4 v1 = bunny.vPos4f[i1];
+    float4 v2 = bunny.vPos4f[i2];
+    Triangle tr;
+    tr.vert[0] = float3(v0.x, v0.y, v0.z);
+    tr.vert[1] = float3(v1.x, v1.y, v1.z);
+    tr.vert[2] = float3(v2.x, v2.y, v2.z);
+    tr.center_pos = (tr.vert[0] + tr.vert[1] + tr.vert[2]) / 3;
+    tr.ind = j;
+    objects[0].tr.push_back(tr);
+  }
+  objects[0].pos = float3(0.0f);
+  std::cout << "Building BVH...\n";
+  objects[0].bvh = build_bvh(objects[0].tr, 0);
+  std::cout << "BVH built!\n";
 
   // Initialize SDL. SDL_Init will return -1 if it fails.
   if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
