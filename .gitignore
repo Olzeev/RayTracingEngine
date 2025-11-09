@@ -3,3 +3,4 @@ main.exe
 build
 models/
 SDL2.dll
+render

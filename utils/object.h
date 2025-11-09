@@ -1,5 +1,4 @@
-#include <LiteMath.h>
-#include "bvh.h"
+#include "LiteMath.h"
 
 using LiteMath::float3;
 
@@ -11,4 +10,5 @@ struct Model {
 struct Object {
     float3 pos;
     Model *model;
+    int reflect;
 };

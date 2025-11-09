@@ -1,4 +1,4 @@
-#include <LiteMath.h>
+#include "LiteMath.h"
 #include "mesh.h"
 #include <vector>
 #include <algorithm>
@@ -25,6 +25,16 @@ struct BVH_Node {
     char type; // 0 - node, 1 - leaf
     std::vector <Triangle> triangles;
 };
+
+#include "object.h"
+
+struct TLBVH_Node {
+    AABB box;
+    TLBVH_Node *left, *right;
+    char type; //0 - box, 1 - leaf
+    std::vector<Object> obj;
+};
+
 
 #include "custom_utils.h"
 
@@ -153,6 +163,105 @@ float bvh_traverse(BVH_Node *cur, float3 pos, float3 ray_pos, float3 ray_dir, fl
         float res1 = bvh_traverse(cur->left, pos, ray_pos, ray_dir, normal1);
         float3 normal2;
         float res2 = bvh_traverse(cur->right, pos, ray_pos, ray_dir, normal2);
+        if (res1 >= 0 && res2 >= 0) {
+            if (res1 <= res2) {
+                normal = normal1;
+                return res1;
+            } else {
+                normal = normal2;
+                return res2;
+            }
+        } else if (res1 >= 0) {
+            normal = normal1;
+            return res1;
+        } else if (res2 >= 0) {
+            normal = normal2;
+            return res2;
+        }
+        return -1.0f;
+    }
+    return -1.0f;
+}
+
+AABB generate_tl_aabb(std::vector <Object> objects, int obj_count) {
+    float3 min_coord = objects[0].pos;
+    float3 max_coord = min_coord;
+    for (int i = 1; i < obj_count; ++i) {
+        min_coord = LiteMath::min(objects[i].pos, min_coord);
+        max_coord = LiteMath::max(objects[i].pos, max_coord);
+    }
+    AABB res;
+    res.pos = (min_coord + max_coord) / 2.0f;
+    res.size = (max_coord - min_coord + 1.0f) / 2.0f;
+    return res;
+}
+
+
+bool cmp_tl_x(Object &a, Object &b) { return a.pos.x < b.pos.x; }
+bool cmp_tl_y(Object &a, Object &b) { return a.pos.y < b.pos.y; }
+bool cmp_tl_z(Object &a, Object &b) { return a.pos.z < b.pos.z; }
+
+TLBVH_Node * build_tl_bvh(std::vector <Object> objects) {
+    int obj_count = objects.size();
+
+    if (obj_count <= 1) {
+        TLBVH_Node *res = new TLBVH_Node;
+        res->type = 1;
+        res->obj = objects;
+        return res;
+    }
+    TLBVH_Node *res = new TLBVH_Node;
+
+    AABB box = generate_tl_aabb(objects, obj_count);
+    res->type = 0;
+    res->box = box;
+
+    
+    if (box.size.x >= box.size.y && box.size.x >= box.size.z) {
+        sort(objects.begin(), objects.end(), cmp_tl_x);
+    }
+    else if (box.size.y >= box.size.x && box.size.y >= box.size.z) {
+        sort(objects.begin(), objects.end(), cmp_tl_y);
+    } else {
+        sort(objects.begin(), objects.end(), cmp_tl_z);
+    }
+    std::vector <Object> obj1;
+    std::vector <Object> obj2;
+    for (int i = 0; i < obj_count; ++i) {
+        if (i < obj_count / 2) {
+            obj1.push_back(objects[i]);
+        } else {
+            obj2.push_back(objects[i]);
+        }
+    }
+    res->left = build_tl_bvh(obj1);
+    res->right = build_tl_bvh(obj2);
+    return res;
+}
+
+
+float tl_bvh_traverse(TLBVH_Node *cur, float3 ray_pos, float3 ray_dir, float3 &normal) {
+    if (cur == NULL) {
+        return -1;
+    }
+    if (cur->type == 1) {
+        if (cur->obj.size() == 0) {
+            return -1;
+        }
+        float3 cur_normal;
+        float dist = bvh_traverse(cur->obj[0].model->bvh, cur->obj[0].pos, ray_pos, ray_dir, cur_normal);
+        if (dist >= 0) {
+            normal = cur_normal;
+            return dist;
+        }
+        return -1;
+    }
+    if (ray_box_intersect(cur->box, float3(0.0f), ray_pos, ray_dir)) {
+        float3 normal1;
+        float res1 = tl_bvh_traverse(cur->left, ray_pos, ray_dir, normal1);
+        float3 normal2;
+        float res2 = tl_bvh_traverse(cur->right, ray_pos, ray_dir, normal2);
+
         if (res1 >= 0 && res2 >= 0) {
             if (res1 <= res2) {
                 normal = normal1;

@@ -14,9 +14,9 @@
 #include <SDL.h>
 #include <chrono>
 #include "utils/LiteMath.h"
-#include "utils/object.h"
+#include "utils/bvh.h"
 
-
+#define PI 3.14159265359
 
 using LiteMath::float2;
 using LiteMath::float3;
@@ -31,7 +31,6 @@ using LiteMath::uint4;
 static constexpr int SCREEN_WIDTH  = 640;
 static constexpr int SCREEN_HEIGHT = 480;
 
-float rad_to_deg(float rad) { return rad * 180.0f / M_PI; }
 
 uint32_t float3_to_RGBA8(float3 c)
 {
@@ -42,9 +41,7 @@ uint32_t float3_to_RGBA8(float3 c)
 }
 
 
-void render(const Camera &camera, uint32_t *out_image, int W, int H, 
-  Object objects[], int objects_count
-)
+void render(const Camera &camera, uint32_t *out_image, int W, int H, TLBVH_Node *tl_bvh)
 {
 
   #pragma omp parallel for collapse(2)
@@ -54,23 +51,10 @@ void render(const Camera &camera, uint32_t *out_image, int W, int H,
     {
       float3 cur_dir = screen_offset(camera.dir, x, y, W, H);
       float3 color = float3(0.0f);
-
-      char intersection = 0;
-      float min_dist = std::numeric_limits<float>::max();
       float3 normal;
-
-      for (int i = 0; i < objects_count; ++i) {
-        float3 cur_normal;
-        float cur_dist = bvh_traverse(objects[i].model->bvh, objects[i].pos, camera.pos, cur_dir, cur_normal);
-        if (cur_dist >= 0) {
-          if (!intersection || cur_dist < min_dist) {
-            min_dist = cur_dist;
-            normal = cur_normal;
-            intersection = 1;
-          }
-        }
-      }
-      if (intersection) {
+      float cur_dist = tl_bvh_traverse(tl_bvh, camera.pos, cur_dir, normal);
+        
+      if (cur_dist >= 0) {
         color = float3(0.2f + dot(normal, normalize(float3(-1, 1, 0.2))));
       }
       out_image[y*W + x] = float3_to_RGBA8(color);
@@ -79,7 +63,9 @@ void render(const Camera &camera, uint32_t *out_image, int W, int H,
 }
 
 void get_triangles(Model &model, cmesh4::SimpleMesh &mesh) {
-  size_t m_tr_num = mesh.IndicesNum() / 3;      
+  size_t m_tr_num = mesh.IndicesNum() / 3;
+  float4 min_coord = mesh.vPos4f[mesh.indices[0]];
+  float4 max_coord = min_coord; 
   for (size_t j = 0; j < m_tr_num; ++j) {
     unsigned int i0 = mesh.indices[3*j + 0];
     unsigned int i1 = mesh.indices[3*j + 1];
@@ -95,7 +81,25 @@ void get_triangles(Model &model, cmesh4::SimpleMesh &mesh) {
     tr.center_pos = (tr.vert[0] + tr.vert[1] + tr.vert[2]) / 3;
     tr.ind = j;
     model.tr.push_back(tr);
+
+    min_coord = LiteMath::min(min_coord, LiteMath::min(v0, LiteMath::min(v1, v2)));
+    max_coord = LiteMath::max(max_coord, LiteMath::max(v0, LiteMath::max(v1, v2)));
   }
+  float sizex = max_coord.x - min_coord.x;
+  float sizey = max_coord.y - min_coord.y;
+  float sizez = max_coord.z - min_coord.z;
+  float size_max = LiteMath::max(sizex, LiteMath::max(sizey, sizez));
+  float3 center = float3(
+    (min_coord.x + max_coord.x) / 2.0f, 
+    (min_coord.y + max_coord.y) / 2.0f,
+    (min_coord.z + max_coord.z) / 2.0f
+  );
+  for (int i = 0; i < m_tr_num; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      model.tr[i].vert[j] = (model.tr[i].vert[j] - center) / size_max;
+    }
+  }
+
 }
 
 
@@ -105,8 +109,7 @@ int main(int argc, char **args)
   // Pixel buffer (RGBA format)
   std::vector<uint32_t> pixels(SCREEN_WIDTH * SCREEN_HEIGHT, 0xFFFFFFFF); // Initialize with white pixels
   
-  //cmesh4::SimpleMesh mesh = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
-  cmesh4::SimpleMesh bunny_mesh = cmesh4::LoadMeshFromObj("models/stanford-bunny.obj", true);
+  cmesh4::SimpleMesh bunny_mesh = cmesh4::LoadMeshFromObj("models/SP2_Gun.obj", true);
   Model bunny;
   get_triangles(bunny, bunny_mesh);
   
@@ -114,17 +117,31 @@ int main(int argc, char **args)
   bunny.bvh = build_bvh(bunny.tr, 0);
   std::cout << "BVH built!\n";
 
+/*
+  cmesh4::SimpleMesh gun_mesh = cmesh4::LoadMeshFromObj("models/SP2_Gun.obj", true);
+  Model gun;
+  get_triangles(gun, gun_mesh);
   
-
-
-  int objects_count = 10;
-  Object objects[objects_count];
-  for (int i = 0; i < objects_count; ++i) {
-    objects[i].pos = float3(i * 2, 0, 0);
-    objects[i].model = &bunny;
+  std::cout << "Building gun BVH...\n";
+  gun.bvh = build_bvh(gun.tr, 0);
+  std::cout << "BVH built!\n";
+*/
+  std::vector <Object> objects(1);
+  objects[0].pos = float3(0.0f);
+  objects[0].model = &bunny;
+  
+  /*
+  std::vector <Object> objects(100);
+  for (int i = 0; i < 10; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      objects[i * 10 + j].pos = float3(i * 2, 0, j * 2);
+      objects[i * 10 + j].model = &bunny;
+    }
+    
   }
+    */
 
-  //tl_bvh = build_tl_bvh(objects, objects_count);
+  TLBVH_Node *tl_bvh = build_tl_bvh(objects);
 
   // Initialize SDL. SDL_Init will return -1 if it fails.
   if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
@@ -233,8 +250,8 @@ int main(int argc, char **args)
             camera.angle_x += dx * camera.sensitivity * dt;
             camera.angle_y -= dy * camera.sensitivity * dt;
 
-            if(camera.angle_y > M_PI / 2.001) camera.angle_y = M_PI / 2.001;
-            if(camera.angle_y < -M_PI / 2.001) camera.angle_y = -M_PI / 2.001;
+            if(camera.angle_y > PI / 2.001) camera.angle_y = PI / 2.001;
+            if(camera.angle_y < -PI / 2.001) camera.angle_y = -PI / 2.001;
 
             camera.dir.x = cos(camera.angle_y) * cos(camera.angle_x);
             camera.dir.y = sin(camera.angle_y);
@@ -259,7 +276,7 @@ int main(int argc, char **args)
     
 
     // Render the scene
-    render(camera, pixels.data(), SCREEN_WIDTH, SCREEN_HEIGHT, objects, objects_count);
+    render(camera, pixels.data(), SCREEN_WIDTH, SCREEN_HEIGHT, tl_bvh);
 
     // Update the texture with the pixel buffer
     SDL_UpdateTexture(texture, nullptr, pixels.data(), SCREEN_WIDTH * sizeof(uint32_t));
