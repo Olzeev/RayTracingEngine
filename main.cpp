@@ -120,7 +120,7 @@ int main(int argc, char **args)
   
 
   int b_count = 0, g_count = 0, m_count = 0, c_count = 0;
-  
+  bool cam = false;
   for (int i = 1; i < argc; ++i) {
     if (strcmp(args[i], "-bunny") == 0) {
       std::cout << "Bunnies count:\n";
@@ -136,8 +136,39 @@ int main(int argc, char **args)
       std::cin >> m_count;
     } else if (strcmp(args[i], "-shadow") == 0) {
       shadow = true;
+    } else if (strcmp(args[i], "-camera") == 0) {
+      cam = true;
+    } else if(strcmp(args[i], "-h") == 0 || strcmp(args[i], "--help") == 0) {
+      std::cout << "Create element:\n-bunny\n-gun\n-cube\n-cyl: motorcycle cylinder head\nEnter amount of each element\n-shadow: enable hard shadows\n-camera: customize camera\n";
+      return 0;
     }
   }
+
+  Camera camera;
+  camera.pos = float3(-3, 2, 0);
+  camera.dir = normalize(float3(1, -0.2, 0));
+  camera.angle_x = 0.0f;
+  camera.angle_y = 0.0f;
+  camera.speed = 3.0f;
+  camera.sensitivity = 0.05f;
+  if (cam) {
+    std::cout << "Camera position:\n";
+    std::cin >> camera.pos.x >> camera.pos.y >> camera.pos.z;
+    std::cout << "Camera direction:\n";
+    std::cin >> camera.dir.x >> camera.dir.y >> camera.dir.z;
+    camera.dir = normalize(camera.dir);
+    std::cout << "Camera speed (<=0 for default value):\n";
+    std::cin >> camera.speed;
+    if (camera.speed <= 0) {
+      camera.speed = 3.0f;
+    }
+    std::cout << "Camera sensitivity (<=0 for default value):\n";
+    std::cin >> camera.sensitivity;
+    if (camera.sensitivity <= 0) {
+      camera.sensitivity = 0.05f;
+    }
+  }
+
   cmesh4::SimpleMesh gun_mesh, bunny_mesh, cyl_mesh;
   cmesh4::SimpleMesh cube_mesh = cmesh4::LoadMeshFromObj("models/cube.obj", true);
   
@@ -313,13 +344,8 @@ int main(int argc, char **args)
   SDL_Event ev;
   bool running = true;
 
-  Camera camera;
-  camera.pos = float3(-3, 2, 0);
-  camera.dir = normalize(float3(1, -0.2, 0));
-  camera.angle_x = 0.0f;
-  camera.angle_y = 0.0f;
-  camera.speed = 2.0f;
-  camera.sensitivity = 0.05f;
+  
+  
 
   auto time = std::chrono::high_resolution_clock::now();
   auto prev_time = time;
