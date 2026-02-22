@@ -6,12 +6,10 @@
   <img src="samples/output1.png" width="300"/>
   <img src="samples/output2.png" width="300"/>
   <img src="samples/output3.png" width="300"/>
-</div>
-<div style="display: flex">
   <img src="samples/output4.png" width="300"/>
   <img src="samples/output5.png" width="300"/>
 </div>
-<img src="samples/output6.png" width="900" />
+<img src="samples/output6.png"/>
 
 
 
@@ -165,3 +163,4 @@ BACKGROUND\_COLOR - цвет заднего плана (0-1, 0-1, 0-1)
 
 
 Результат сохраняется в картинке out.png
+
