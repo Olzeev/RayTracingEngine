@@ -2,6 +2,19 @@
 
 Консольное приложение для рендеринга 3Д моделей
 
+<div style="display: flex">
+  <img src="samples/output1.png" width="300"/>
+  <img src="samples/output2.png" width="300"/>
+  <img src="samples/output3.png" width="300"/>
+</div>
+<div style="display: flex">
+  <img src="samples/output4.png" width="300"/>
+  <img src="samples/output5.png" width="300"/>
+</div>
+<img src="samples/output6.png" width="900" />
+
+
+
 Поддерживаются 
 
 3 примитива:
@@ -149,5 +162,6 @@ BACKGROUND\_COLOR - цвет заднего плана (0-1, 0-1, 0-1)
 ```
 ./main -c < samples/input1.txt
 ```
+
 
 Результат сохраняется в картинке out.png
