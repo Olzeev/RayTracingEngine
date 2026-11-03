@@ -33,7 +33,7 @@ float3 BACKGROUND_COLOR = float3(0.0);
 
 
 int ray_marching(
-  Scene scene, float3 cur_pos, float3 cur_dir, 
+  Scene &scene, float3 cur_pos, float3 cur_dir, 
   float3 &intersect_point, 
   float3 &intersect_normal, 
   Material &mat
@@ -68,7 +68,7 @@ int ray_marching(
 
 
 int ray_tracing( 
-  Scene scene, float3 cur_pos, float3 cur_dir, 
+  Scene &scene, float3 cur_pos, float3 cur_dir, 
   float3 &intersect_point, 
   float3 &intersect_normal, 
   Material &mat
@@ -115,7 +115,7 @@ int ray_tracing(
 }
 
 
-float ambient_occlusion(Scene scene, float3 point, float3 normal) {
+float ambient_occlusion(Scene &scene, float3 point, float3 normal) {
   int cnt = 0;
   float radius = 10.0f;
   for (int i = 0; i < DIFFUSE_RAYS_COUNT; ++i) {
@@ -260,6 +260,7 @@ int main(int argc, char **argv)
   }
   std::vector<float> image(3*W*H, 0.0f);
   std::cout << "\nRendering started...\n";
+  #pragma omp parallel for schedule(dynamic, 1)
   for (int x = 0; x < W; ++x) {
     for (int y = 0; y < H; ++y) {
       float3 new_dir = screen_offset(camera.dir, x, y, W, H, FOV_H, FOV_V);

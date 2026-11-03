@@ -34,9 +34,8 @@ float3 screen_offset(float3 dir, int x, int y, const int W, const int H, float f
 
 
 float random_float() {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    thread_local std::mt19937 gen(std::random_device{}());
+    thread_local std::uniform_real_distribution<float> dist(0.0f, 1.0f);
     return dist(gen);
 }
 
