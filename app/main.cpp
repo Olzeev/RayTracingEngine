@@ -8,8 +8,12 @@
 #include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Tree.H>
 #include <FL/Fl_Native_File_Chooser.H>
+#include <FL/Fl_Gl_Window.H>
+#include <FL/gl.h>
+
 #include <iostream>
 #include <filesystem>
+
 
 
 namespace fs = std::filesystem;
@@ -87,6 +91,34 @@ void open_project(Fl_Widget* w, void * data) {
     }
 }
 
+class RenderView : public Fl_Gl_Window {
+    float angle = 0.0f; // Угол поворота
+public: 
+    RenderView(int x, int y, int w, int h) : Fl_Gl_Window(x, y, w, h) {
+        mode(FL_RGB8 | FL_DOUBLE | FL_DEPTH | FL_OPENGL3);
+    }
+    void draw() override {
+        if (!valid()) {
+            valid(1);
+            glViewport(0, 0, pixel_w(), pixel_h());
+            // настройка проекции и т.д.
+        }
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // Вращение
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        glRotatef(angle, 0.0f, 0.0f, 1.0f); // Вращаем вокруг оси Z
+
+        // Рисуем треугольник
+        glBegin(GL_TRIANGLES);
+        glColor3f(1.0f, 0.0f, 0.0f); glVertex2f( 0.0f,  0.5f); // Красный верх
+        glColor3f(0.0f, 1.0f, 0.0f); glVertex2f(-0.5f, -0.5f); // Зелёный лево
+        glColor3f(0.0f, 0.0f, 1.0f); glVertex2f( 0.5f, -0.5f); // Синий право
+        glEnd();
+    }
+};
+
 int main(int argc, char **argv) {
      Fl::option(Fl::OPTION_FNFC_USES_GTK, false);
     Fl_Window *window = new Fl_Window(WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -128,7 +160,13 @@ int main(int argc, char **argv) {
     central_panel->labelfont(FL_BOLD+FL_ITALIC);
     central_panel->labelsize(36);
 
+    RenderView* gl_view = new RenderView(
+        central_panel->x(), central_panel->y(), 
+        central_panel->w(), central_panel->h()
+    );
+
     central_panel->end();
+    central_panel->resizable(gl_view);
 
     Fl_Group *right_panel = new Fl_Group(WINDOW_WIDTH - RIGHT_PANEL_WIDTH, TOP_PANEL_HEIGHT, 
         RIGHT_PANEL_WIDTH, WINDOW_HEIGHT - TOP_PANEL_HEIGHT - BOTTOM_PANEL_HEIGHT);
