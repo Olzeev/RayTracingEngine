@@ -38,6 +38,9 @@ int WINDOW_MIN_SIZE[2] = {
 std::string OPENED_DIRECTORY = "";
 
 void build_file_tree(Fl_Tree & tree, const fs::path& directory) {
+    // TODO: implement lazy loading
+    // TODO: sort entries
+
     tree.clear();
     std::string root_name = directory.filename();
     if (root_name.empty())
@@ -56,8 +59,10 @@ void build_file_tree(Fl_Tree & tree, const fs::path& directory) {
     for (const auto& entry : iterator) {
         fs::path relative_path = fs::relative(entry.path(), directory, error);
 
-        if (!error)
-            tree.add(relative_path.generic_string().c_str());
+        if (!error) {
+            Fl_Tree_Item* cur_item = tree.add(relative_path.generic_string().c_str());
+            cur_item->close();
+        }
 
         error.clear();
     }
