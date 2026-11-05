@@ -164,3 +164,5 @@ BACKGROUND\_COLOR - цвет заднего плана (0-1, 0-1, 0-1)
 
 Результат сохраняется в картинке out.png
 
+
+sudo apt install libfltk1.3-dev

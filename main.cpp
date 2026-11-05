@@ -132,7 +132,7 @@ float ambient_occlusion(Scene &scene, float3 point, float3 normal) {
   return 1.0f - float(cnt) / DIFFUSE_RAYS_COUNT;
 }
 
-float3 render(Scene scene, float3 cur_pos, float3 cur_dir, int iter) {
+float3 render(Scene &scene, float3 cur_pos, float3 cur_dir, int iter) {
   if (iter >= REFLECT_ITERATIONS) {
     return float3(0.0);
   }
